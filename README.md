@@ -56,7 +56,6 @@
 * GRU-based recurrent neural network
 * Prediction from the last 10 sensor readings
 * Held-out anomaly detection evaluation
-* Real SKAB industrial anomaly dataset support
 
 ---
 
@@ -85,7 +84,6 @@
 | **Hopfield Network** | NumPy                                   |
 | **RNN**              | PyTorch / GRU                           |
 | **Expert System**    | Hand-rolled forward-chaining engine     |
-| **Dataset**          | SKAB industrial anomaly dataset         |
 
 ---
 
@@ -364,9 +362,9 @@ ALL TESTS PASSED (10/10)
 
 ---
 
-# 📊 RNN Results on SKAB
+# 📊 RNN Results
 
-The optional SKAB dataset implementation was used to evaluate the GRU anomaly detector on multiple industrial sensor experiments.
+The dataset implementation was used to evaluate the GRU anomaly detector on multiple industrial sensor experiments.
 
 Example held-out evaluation:
 
