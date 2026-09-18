@@ -1,6 +1,5 @@
 import numpy as np
 
-# Six synthetic 8x8 binary label-scan patterns (64-bit normal labels).
 PATTERNS = [
     ["11111110","01001110","11010100","10011110","11111001","01010100","10001101","10000111"],
     ["11110011","00010000","11011010","00101011","01001100","01010110","10000100","10011100"],
@@ -46,8 +45,10 @@ class Hopfield:
 def demo(index=2, seed=4, flips=8):
     if not 0 <= index < len(PATTERNS):
         raise ValueError("Pattern index must be 0..5")
+
     if not 6 <= flips <= 10:
         raise ValueError("Corruption must be 10-15% (6-10 of 64 bits)")
+
     rng = np.random.default_rng(seed)
     patterns = [to_vector(x) for x in PATTERNS]
     net = Hopfield(); net.train(patterns)
@@ -56,8 +57,8 @@ def demo(index=2, seed=4, flips=8):
     noisy[rng.choice(64, flips, replace=False)] *= -1
     recalled, history = net.recall(noisy)
     accuracy = float(np.mean(recalled == original))
-    return to_bitmap(original), to_bitmap(noisy), to_bitmap(recalled), accuracy, len(history) - 1
 
+    return to_bitmap(original), to_bitmap(noisy), to_bitmap(recalled), accuracy, len(history) - 1
 
 if __name__ == "__main__":
     for index in (0, 2):

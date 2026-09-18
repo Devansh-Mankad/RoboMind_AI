@@ -26,11 +26,6 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
-
-# ============================================================
-# Configuration
-# ============================================================
-
 FEATURE_COLUMNS = [
     "Accelerometer1RMS",
     "Accelerometer2RMS",
@@ -42,24 +37,13 @@ FEATURE_COLUMNS = [
     "Volume Flow RateRMS",
 ]
 
-DEFAULT_DATASET = (
-    Path(__file__).resolve().parents[1]
-    / "data"
-    / "skab"
-)
-
-
-# ============================================================
-# RNN Model
-# ============================================================
+DEFAULT_DATASET = (Path(__file__).resolve().parents[1]/ "data"/ "skab")
 
 class SensorRNN(nn.Module):
     """
     GRU-based anomaly detector.
-
     Input:
         sequence of sensor readings
-
     Output:
         anomaly logit for the final point in the sequence
     """
@@ -95,30 +79,18 @@ class SensorRNN(nn.Module):
 
     def forward(self, x):
         output, _ = self.rnn(x)
-
-        # Use the final time step.
         last_output = output[:, -1, :]
-
         last_output = self.dropout(last_output)
-
         return self.fc(last_output).squeeze(1)
-
-
-# ============================================================
-# Dataset loading
-# ============================================================
 
 def _read_single_csv(path):
     """
     Read one SKAB CSV file.
-
     SKAB CSV files use semicolon separators.
     """
 
     path = Path(path)
-
     df = pd.read_csv(path, sep=";")
-
     required_columns = FEATURE_COLUMNS + ["anomaly"]
 
     missing = [
@@ -136,22 +108,12 @@ def _read_single_csv(path):
 
     df = df[required_columns].copy()
 
-    # Convert sensor values to numeric.
     for column in FEATURE_COLUMNS:
-        df[column] = pd.to_numeric(
-            df[column],
-            errors="coerce",
-        )
+        df[column] = pd.to_numeric(df[column],errors="coerce",)
 
-    # Convert anomaly labels.
-    df["anomaly"] = pd.to_numeric(
-        df["anomaly"],
-        errors="coerce",
-    )
-
+    df["anomaly"] = pd.to_numeric(df["anomaly"],errors="coerce",)
     df = df.dropna().reset_index(drop=True)
 
-    # SKAB uses 0/1 anomaly labels.
     df["anomaly"] = (
         df["anomaly"]
         .astype(int)
@@ -160,11 +122,9 @@ def _read_single_csv(path):
 
     return df
 
-
 def _find_csv_files(path):
     """
     Find CSV files.
-
     If path is a CSV:
         return [path]
 
@@ -173,34 +133,24 @@ def _find_csv_files(path):
     """
 
     path = Path(path)
-
     if not path.exists():
-        raise FileNotFoundError(
-            f"Dataset path does not exist: {path}"
-        )
+        raise FileNotFoundError(f"Dataset path does not exist: {path}")
 
     if path.is_file():
         if path.suffix.lower() != ".csv":
-            raise ValueError(
-                f"Expected a CSV file or dataset folder, got: {path}"
-            )
+            raise ValueError(f"Expected a CSV file or dataset folder, got: {path}")
 
         return [path]
 
     csv_files = sorted(path.rglob("*.csv"))
-
     if not csv_files:
-        raise FileNotFoundError(
-            f"No CSV files found inside dataset folder: {path}"
-        )
-
+        raise FileNotFoundError(f"No CSV files found inside dataset folder: {path}")
     return csv_files
 
 
 def load_skab_experiments(path):
     """
     Load one or multiple SKAB experiments.
-
     Returns:
         list of dictionaries:
         [
@@ -212,18 +162,13 @@ def load_skab_experiments(path):
             ...
         ]
     """
-
     csv_files = _find_csv_files(path)
-
     experiments = []
 
     for csv_file in csv_files:
-
         try:
             df = _read_single_csv(csv_file)
         except ValueError as exc:
-            # Ignore unrelated CSV files if a folder contains
-            # other files that are not SKAB experiment files.
             print(f"Skipping {csv_file}: {exc}")
             continue
 
@@ -243,12 +188,9 @@ def load_skab_experiments(path):
         )
 
     if not experiments:
-        raise ValueError(
-            "No valid SKAB experiment CSV files were found."
-        )
+        raise ValueError("No valid SKAB experiment CSV files were found.")
 
     return experiments
-
 
 def load_skab_dataset(path):
     """
@@ -261,7 +203,6 @@ def load_skab_dataset(path):
     """
 
     experiments = load_skab_experiments(path)
-
     if len(experiments) == 1:
         return experiments[0]["df"]
 
@@ -277,11 +218,6 @@ def load_skab_dataset(path):
         ignore_index=True,
     )
 
-
-# ============================================================
-# Window creation
-# ============================================================
-
 def make_windows(df, window=10):
     """
     Create temporal windows.
@@ -296,10 +232,7 @@ def make_windows(df, window=10):
             f"but window size is {window}."
         )
 
-    values = df[FEATURE_COLUMNS].to_numpy(
-        dtype=np.float32
-    )
-
+    values = df[FEATURE_COLUMNS].to_numpy(dtype=np.float32)
     labels = df["anomaly"].to_numpy(
         dtype=np.float32
     )
@@ -308,60 +241,38 @@ def make_windows(df, window=10):
     y = []
 
     for end in range(window, len(df) + 1):
-
-        x.append(
-            values[end - window:end]
-        )
-
-        y.append(
-            labels[end - 1]
-        )
+        x.append(values[end - window:end])
+        y.append(labels[end - 1])
 
     return (
         np.asarray(x, dtype=np.float32),
         np.asarray(y, dtype=np.float32),
     )
 
-
-# ============================================================
-# Experiment splitting
-# ============================================================
-
 def _experiment_has_both_classes(experiment):
     labels = experiment["df"]["anomaly"].to_numpy()
-
     return (
         np.any(labels == 0)
         and np.any(labels == 1)
     )
 
-
 def split_experiments(experiments):
     """
     Split complete SKAB experiments.
-
     The preferred split is:
-
         70% train
         15% validation
         15% test
 
     Experiments are never mixed between splits.
-
     When only a small number of CSVs is available, the function
     ensures that the test set contains an anomaly whenever possible.
     """
 
     n = len(experiments)
-
     if n == 1:
-        return (
-            experiments,
-            [],
-            [],
-        )
+        return (experiments,[],[],)
 
-    # Put anomaly-containing experiments first.
     experiments = sorted(
         experiments,
         key=lambda e: (
@@ -371,56 +282,25 @@ def split_experiments(experiments):
     )
 
     if n == 2:
-        return (
-            [experiments[0]],
-            [],
-            [experiments[1]],
-        )
+        return ([experiments[0]],[],[experiments[1]],)
 
     if n == 3:
-        return (
-            [experiments[0]],
-            [experiments[1]],
-            [experiments[2]],
-        )
+        return ([experiments[0]],[experiments[1]],[experiments[2]],)
 
-    train_count = max(
-        1,
-        int(round(n * 0.70)),
-    )
-
-    val_count = max(
-        1,
-        int(round(n * 0.15)),
-    )
+    train_count = max(1,int(round(n * 0.70)),)
+    val_count = max(1,int(round(n * 0.15)),)
 
     if train_count + val_count >= n:
         train_count = n - 2
         val_count = 1
 
     train = experiments[:train_count]
+    validation = experiments[train_count:train_count + val_count]
 
-    validation = experiments[
-        train_count:train_count + val_count
-    ]
-
-    test = experiments[
-        train_count + val_count:
-    ]
-
+    test = experiments[train_count + val_count:]
     return train, validation, test
 
-
-# ============================================================
-# Single-file fallback splitting
-# ============================================================
-
-def split_single_experiment(
-    x,
-    y,
-    train_ratio=0.60,
-    val_ratio=0.20,
-):
+def split_single_experiment(x,y,train_ratio=0.60,val_ratio=0.20,):
     """
     Fallback for the case where only one SKAB CSV is supplied.
 
@@ -436,16 +316,11 @@ def split_single_experiment(
     """
 
     n = len(x)
-
     if n < 30:
-        raise ValueError(
-            "Not enough windows for train/validation/test split."
-        )
+        raise ValueError("Not enough windows for train/validation/test split.")
 
     train_end = int(n * train_ratio)
-    val_end = int(
-        n * (train_ratio + val_ratio)
-    )
+    val_end = int(n * (train_ratio + val_ratio))
 
     train_end = max(1, train_end)
     val_end = min(n - 1, max(train_end + 1, val_end))
@@ -459,30 +334,18 @@ def split_single_experiment(
     test_x = x[val_end:]
     test_y = y[val_end:]
 
-    # If test contains no anomaly but the dataset does contain
-    # anomalies, search for a later/earlier boundary that gives
-    # the test set an anomaly while preserving chronology.
-    if (
-        np.sum(test_y) == 0
-        and np.sum(y) > 0
-    ):
-
+    if (np.sum(test_y) == 0 and np.sum(y) > 0):
         anomaly_indices = np.where(y == 1)[0]
-
         last_anomaly = anomaly_indices[-1]
 
         if last_anomaly >= val_end:
-
-            # Test already covers last anomaly.
             pass
 
         else:
-            # Move validation/test boundary backwards.
             candidate = max(
                 train_end + 1,
                 last_anomaly - max(1, int(n * 0.05)),
             )
-
             val_x = x[train_end:candidate]
             val_y = y[train_end:candidate]
 
@@ -495,11 +358,6 @@ def split_single_experiment(
         (test_x, test_y),
     )
 
-
-# ============================================================
-# Normalization
-# ============================================================
-
 def standardize(train_x, *other_x):
     """
     Fit normalization only on training data.
@@ -507,35 +365,20 @@ def standardize(train_x, *other_x):
     This prevents test-data leakage.
     """
 
-    flat_train = train_x.reshape(
-        -1,
-        train_x.shape[-1],
-    )
-
+    flat_train = train_x.reshape(-1,train_x.shape[-1],)
     mean = flat_train.mean(axis=0)
     std = flat_train.std(axis=0)
 
     std[std < 1e-6] = 1.0
+    transformed = [(train_x - mean) / std]
 
-    transformed = [
-        (train_x - mean) / std
-    ]
-
-    transformed.extend(
-        (x - mean) / std
-        for x in other_x
-    )
+    transformed.extend((x - mean) / std for x in other_x)
 
     return (
         *transformed,
         mean,
         std,
     )
-
-
-# ============================================================
-# Metrics
-# ============================================================
 
 def metrics(
     y_true,
@@ -546,17 +389,11 @@ def metrics(
     Calculate classification metrics.
     """
 
-    y_true = np.asarray(
-        y_true
-    ).astype(int)
+    y_true = np.asarray(y_true).astype(int)
 
-    probabilities = np.asarray(
-        probabilities
-    )
+    probabilities = np.asarray(probabilities)
 
-    y_pred = (
-        probabilities >= threshold
-    ).astype(int)
+    y_pred = (probabilities >= threshold).astype(int)
 
     tp = int(
         (
@@ -621,7 +458,6 @@ def metrics(
         "fn": fn,
     }
 
-
 def find_best_threshold(
     y_true,
     probabilities,
@@ -656,16 +492,7 @@ def find_best_threshold(
 
     return best_threshold
 
-
-# ============================================================
-# Model prediction
-# ============================================================
-
-def _probabilities(
-    model,
-    x,
-    batch_size=256,
-):
+def _probabilities(model,x,batch_size=256,):
     """
     Generate anomaly probabilities in batches.
     """
@@ -684,35 +511,18 @@ def _probabilities(
     )
 
     probabilities = []
-
     with torch.no_grad():
-
         for (xb,) in loader:
-
             logits = model(xb)
-
-            probs = torch.sigmoid(
-                logits
-            )
-
-            probabilities.extend(
-                probs.cpu().numpy()
-            )
+            probs = torch.sigmoid(logits)
+            probabilities.extend(probs.cpu().numpy())
 
     return np.asarray(
         probabilities,
         dtype=np.float32,
     )
 
-
-# ============================================================
-# Dataset preparation
-# ============================================================
-
-def _build_dataset_from_experiments(
-    experiments,
-    window,
-):
+def _build_dataset_from_experiments(experiments,window,):
     """
     Convert a list of SKAB experiments into windows.
     """
@@ -721,9 +531,7 @@ def _build_dataset_from_experiments(
     all_y = []
 
     for experiment in experiments:
-
         df = experiment["df"]
-
         try:
             x, y = make_windows(
                 df,
@@ -739,19 +547,12 @@ def _build_dataset_from_experiments(
         all_y.append(y)
 
     if not all_x:
-        raise ValueError(
-            "No usable temporal windows were created."
-        )
+        raise ValueError("No usable temporal windows were created.")
 
     return (
         np.concatenate(all_x, axis=0),
         np.concatenate(all_y, axis=0),
     )
-
-
-# ============================================================
-# Training
-# ============================================================
 
 def train_model(
     dataset_path=DEFAULT_DATASET,
@@ -762,9 +563,7 @@ def train_model(
 ):
     """
     Train the re-tuned GRU on manually downloaded SKAB data.
-
     dataset_path may be:
-
         data/skab
 
     or:
@@ -775,21 +574,12 @@ def train_model(
     torch.manual_seed(3)
     np.random.seed(3)
 
-    dataset_path = Path(
-        dataset_path
-    )
-
-    experiments = load_skab_experiments(
-        dataset_path
-    )
+    dataset_path = Path(dataset_path)
+    experiments = load_skab_experiments(dataset_path)
 
     print(
         f"Loaded {len(experiments)} SKAB experiment(s)."
     )
-
-    # --------------------------------------------------------
-    # Preferred multi-experiment setup
-    # --------------------------------------------------------
 
     if len(experiments) >= 3:
 
@@ -820,10 +610,6 @@ def train_model(
 
         split_type = "experiment-level"
 
-    # --------------------------------------------------------
-    # Two experiment fallback
-    # --------------------------------------------------------
-
     elif len(experiments) == 2:
 
         train_experiments, _, test_experiments = (
@@ -844,7 +630,6 @@ def train_model(
             )
         )
 
-        # Create validation data from the training experiment.
         split = split_single_experiment(
             train_x,
             train_y,
@@ -860,14 +645,8 @@ def train_model(
 
         split_type = "two-experiment"
 
-    # --------------------------------------------------------
-    # Single experiment fallback
-    # --------------------------------------------------------
-
     else:
-
         df = experiments[0]["df"]
-
         x, y = make_windows(
             df,
             window=window,
@@ -883,10 +662,6 @@ def train_model(
         )
 
         split_type = "single-experiment chronological"
-
-    # --------------------------------------------------------
-    # Check labels
-    # --------------------------------------------------------
 
     print(
         "Train labels:",
@@ -936,10 +711,6 @@ def train_model(
             "F1/recall may be zero."
         )
 
-    # --------------------------------------------------------
-    # Normalize using training data only
-    # --------------------------------------------------------
-
     (
         train_x,
         val_x,
@@ -951,10 +722,6 @@ def train_model(
         val_x,
         test_x,
     )
-
-    # --------------------------------------------------------
-    # Class imbalance
-    # --------------------------------------------------------
 
     positive = float(
         np.sum(train_y == 1)
@@ -968,7 +735,6 @@ def train_model(
         negative / max(positive, 1.0)
     )
 
-    # Prevent extremely large weights.
     pos_weight_value = min(
         pos_weight_value,
         20.0,
@@ -992,10 +758,6 @@ def train_model(
         f"{pos_weight_value:.3f}"
     )
 
-    # --------------------------------------------------------
-    # DataLoader
-    # --------------------------------------------------------
-
     train_dataset = TensorDataset(
         torch.tensor(
             train_x,
@@ -1013,12 +775,7 @@ def train_model(
         shuffle=True,
     )
 
-    # --------------------------------------------------------
-    # Model
-    # --------------------------------------------------------
-
     model = SensorRNN()
-
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=lr,
@@ -1029,10 +786,6 @@ def train_model(
         pos_weight=pos_weight
     )
 
-    # --------------------------------------------------------
-    # Training
-    # --------------------------------------------------------
-
     best_state = None
     best_val_f1 = -1.0
 
@@ -1040,46 +793,34 @@ def train_model(
     patience_counter = 0
 
     for epoch in range(epochs):
-
         model.train()
-
         epoch_loss = 0.0
-
         for xb, yb in loader:
-
             optimizer.zero_grad()
-
             logits = model(xb)
-
             loss = loss_fn(
                 logits,
                 yb,
             )
 
             loss.backward()
-
             torch.nn.utils.clip_grad_norm_(
                 model.parameters(),
                 1.0,
             )
-
             optimizer.step()
-
             epoch_loss += float(
                 loss.item()
             )
 
-        # Validation
         val_prob = _probabilities(
             model,
             val_x,
         )
-
         val_threshold = find_best_threshold(
             val_y,
             val_prob,
         )
-
         val_result = metrics(
             val_y,
             val_prob,
@@ -1087,26 +828,19 @@ def train_model(
         )
 
         val_f1 = val_result["f1"]
-
         if val_f1 > best_val_f1:
-
             best_val_f1 = val_f1
-
             best_state = {
                 key: value.detach().clone()
                 for key, value
                 in model.state_dict().items()
             }
-
             patience_counter = 0
 
         else:
-
             patience_counter += 1
 
-        if (
-            epoch == 0
-            or (epoch + 1) % 5 == 0
+        if (epoch == 0 or (epoch + 1) % 5 == 0
         ):
             print(
                 f"Epoch {epoch + 1:02d}/{epochs} "
@@ -1121,18 +855,10 @@ def train_model(
             )
             break
 
-    # --------------------------------------------------------
-    # Restore best model
-    # --------------------------------------------------------
-
     if best_state is not None:
         model.load_state_dict(
             best_state
         )
-
-    # --------------------------------------------------------
-    # Select final threshold from validation data
-    # --------------------------------------------------------
 
     val_prob = _probabilities(
         model,
@@ -1144,10 +870,6 @@ def train_model(
         val_prob,
     )
 
-    # --------------------------------------------------------
-    # Test
-    # --------------------------------------------------------
-
     test_prob = _probabilities(
         model,
         test_x,
@@ -1158,10 +880,6 @@ def train_model(
         test_prob,
         threshold=threshold,
     )
-
-    # --------------------------------------------------------
-    # Information returned to main.py
-    # --------------------------------------------------------
 
     total_rows = sum(
         len(experiment["df"])
@@ -1221,11 +939,6 @@ def train_model(
 
     return model, info
 
-
-# ============================================================
-# Stream prediction
-# ============================================================
-
 def predict_stream(
     model,
     readings,
@@ -1236,28 +949,19 @@ def predict_stream(
 ):
     """
     Predict anomalies from a sequence of sensor readings.
-
     readings can be:
-
         pandas.DataFrame
 
     or:
-
         list of dictionaries
-
     The input must contain all SKAB sensor columns.
     """
 
-    if isinstance(
-        readings,
-        pd.DataFrame,
-    ):
+    if isinstance(readings,pd.DataFrame,):
         df = readings.copy()
 
     else:
-        df = pd.DataFrame(
-            readings
-        )
+        df = pd.DataFrame(readings)
 
     missing = [
         column
@@ -1271,10 +975,7 @@ def predict_stream(
             f"Missing: {missing}"
         )
 
-    values = df[
-        FEATURE_COLUMNS
-    ].copy()
-
+    values = df[FEATURE_COLUMNS].copy()
     for column in FEATURE_COLUMNS:
         values[column] = pd.to_numeric(
             values[column],
@@ -1282,48 +983,24 @@ def predict_stream(
         )
 
     values = values.ffill().bfill()
-
-    values = values.to_numpy(
-        dtype=np.float32
-    )
+    values = values.to_numpy(dtype=np.float32)
 
     if mean is not None and std is not None:
-
-        mean = np.asarray(
-            mean,
-            dtype=np.float32,
-        )
-
-        std = np.asarray(
-            std,
-            dtype=np.float32,
-        )
-
+        mean = np.asarray(mean,dtype=np.float32,)
+        std = np.asarray(std,dtype=np.float32,)
         std = np.where(
             std < 1e-6,
             1.0,
             std,
         )
-
-        values = (
-            values - mean
-        ) / std
+        values = (values - mean) / std
 
     flags = []
-
     model.eval()
 
     with torch.no_grad():
-
-        for end in range(
-            window,
-            len(values) + 1,
-        ):
-
-            sequence = values[
-                end - window:end
-            ]
-
+        for end in range(window,len(values) + 1,):
+            sequence = values[end - window:end]
             tensor = torch.tensor(
                 sequence[None, ...],
                 dtype=torch.float32,
@@ -1345,15 +1022,8 @@ def predict_stream(
 
     return flags
 
-
-# ============================================================
-# Command-line execution
-# ============================================================
-
 if __name__ == "__main__":
-
     import argparse
-
     parser = argparse.ArgumentParser(
         description=(
             "Train Module D RNN on manually "

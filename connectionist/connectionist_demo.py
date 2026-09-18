@@ -1,7 +1,6 @@
 from hopfield import demo
 from rnn_anomaly import train_model
 
-
 def main():
     original, noisy, recalled, accuracy, steps = demo()
     print("Hopfield recall accuracy:", f"{accuracy:.2%}", "steps:", steps)

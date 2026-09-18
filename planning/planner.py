@@ -129,7 +129,6 @@ def action_preconditions(action):
 
 
 def clear_achiever(state, box, boxes):
-    # To make a block clear, unstack the block currently sitting on it.
     top = next((x for x, y in state["on"].items() if y == box), None)
     if top is None:
         return None
@@ -161,17 +160,19 @@ def goal_stack_plan(start, goal):
         state = replay_plan(start, plan)
         item = stack[-1]
         signature = (state_key(state), tuple(stack[-6:]))
+
         if signature in seen:
-            # A repeated stack configuration indicates this choice is unproductive.
             raise ValueError("Goal Stack Planner could not find a plan for the supplied states")
         seen.add(signature)
 
         kind, value = item
+
         if kind == "GOAL":
             if predicate_holds(state, value, boxes):
                 stack.pop()
                 continue
             action = achiever(value)
+
             if action is None:
                 if value[0] == "clear":
                     action = clear_achiever(state, value[1], boxes)
@@ -179,17 +180,20 @@ def goal_stack_plan(start, goal):
                     action = holding_achiever(state, value[1], boxes)
                 elif value[0] == "handempty" and state["holding"] is not None:
                     action = Action("PUTDOWN", state["holding"])
+
             if action is None:
                 raise ValueError(f"No operator can achieve goal {value}")
+
             stack.pop()
             stack.append(("ACTION", action))
+
             for precondition in reversed(action_preconditions(action)):
                 if not predicate_holds(state, precondition, boxes):
                     stack.append(("GOAL", precondition))
+
         else:
             action = value
             if not all(predicate_holds(state, p, boxes) for p in action_preconditions(action)):
-                # Preconditions may have changed while satisfying another subgoal.
                 stack.pop()
                 stack.append(("ACTION", action))
                 for precondition in reversed(action_preconditions(action)):
@@ -198,8 +202,8 @@ def goal_stack_plan(start, goal):
             else:
                 stack.pop()
                 plan.append(action)
-    raise ValueError("Goal Stack Planner exceeded iteration limit")
 
+    raise ValueError("Goal Stack Planner exceeded iteration limit")
 
 def replay_plan(start, plan):
     state = normalize(start)
@@ -207,16 +211,15 @@ def replay_plan(start, plan):
         state = apply(state, action)
     return state
 
-
 def gsp_plan(start, goal):
     return goal_stack_plan(start, goal)
-
 
 def nonlinear_plan(start, goal):
     """Partial-order/least-commitment view: derive dependencies only where actions interact."""
     sequential = gsp_plan(start, goal)
     n = len(sequential)
     constraints = {i: set() for i in range(n)}
+
     for i, first in enumerate(sequential):
         for j in range(i + 1, n):
             second = sequential[j]
@@ -224,6 +227,7 @@ def nonlinear_plan(start, goal):
             second_items = {second.box, second.target}
             if first_items & second_items or first.name in {"PICKUP", "UNSTACK"} and second.name in {"PICKUP", "UNSTACK"}:
                 constraints[j].add(i)
+
     layers, placed = [], set()
     while len(placed) < n:
         layer = [i for i in range(n) if i not in placed and constraints[i].issubset(placed)]
@@ -244,6 +248,7 @@ def execute_with_reactive(start, plan, goal=None, disturbance_at=None, seed=7):
     state = normalize(start); goal = normalize(goal or {"on": {}, "ontable": []})
     trace, interventions = [], []
     plan = list(plan); index = 0; step = 0
+
     while index < len(plan):
         step += 1; action = plan[index]
         if disturbance_at == step and state["on"]:
@@ -253,8 +258,6 @@ def execute_with_reactive(start, plan, goal=None, disturbance_at=None, seed=7):
             msg = f"Reactive layer: {knocked} knocked over from {support}; repairing current plan locally."
             interventions.append(msg); trace.append(msg)
             if target:
-                # Local recovery: restore only the disturbed box to its goal position.
-                # If the robot is holding another box, finish that immediate primitive first.
                 if state["holding"] is not None and state["holding"] != knocked:
                     held = state["holding"]
                     state = apply(state, Action("PUTDOWN", held))
@@ -265,10 +268,12 @@ def execute_with_reactive(start, plan, goal=None, disturbance_at=None, seed=7):
                 if state["holding"] == knocked and clear(state, target, boxes_in(state, goal)):
                     state = apply(state, Action("STACK", knocked, target))
                     trace.append(f"Reactive repair: STACK({knocked},{target})")
+
             elif knocked in goal["ontable"]:
                 state = apply(state, Action("PICKUP", knocked))
                 state = apply(state, Action("PUTDOWN", knocked))
                 trace.append(f"Reactive repair: PUTDOWN({knocked})")
+
         if action.name == "UNSTACK" and state["on"].get(action.box) != action.target:
             trace.append(f"Step {step}: skipped {action}; disturbance changed its support")
             index += 1; continue
@@ -285,11 +290,9 @@ def execute_with_reactive(start, plan, goal=None, disturbance_at=None, seed=7):
         state = apply(state, action); trace.append(f"Step {step}: {action}"); index += 1
     return trace, interventions, state
 
-
 def load_json(path):
     with open(path, encoding="utf-8") as f:
         return json.load(f)
-
 
 def demo():
     cases = [
@@ -305,11 +308,9 @@ def demo():
         print("Reactive interventions:", len(interventions))
         print("Goal reached after reactive execution:", goal_reached(final_state, goal))
 
-
 def goal_reached(s, goal):
     s = normalize(s); goal = normalize(goal)
     return s["on"] == goal["on"] and s["ontable"] == goal["ontable"] and s["holding"] is None
-
 
 def main():
     if len(sys.argv) == 3:
@@ -322,6 +323,7 @@ def main():
         print("\n".join(trace))
         print(f"\nGoal reached after reactive execution: {goal_reached(final_state, goal)}")
         for item in interventions: print(item)
+
     else:
         demo()
 
