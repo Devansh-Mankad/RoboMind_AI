@@ -1,0 +1,20 @@
+[
+{"id":"R01","if_all":["wheel_slip","motor_current_high"],"then":"wheel_slipping","message":"wheel slip together with high motor current suggests traction trouble"},
+{"id":"R02","if_all":["wheel_slip","encoder_mismatch"],"then":"wheel_slipping","message":"wheel slip and encoder mismatch point to wheel feedback trouble"},
+{"id":"R03","if_all":["vision_inconsistent","weight_stable"],"then":"sensor_drift","message":"vision changes while weight stays stable suggests a vision sensor issue"},
+{"id":"R04","if_all":["tilt_triggered","vision_inconsistent"],"then":"sensor_drift","message":"tilt and vision disagree, so a sensor drift check is needed"},
+{"id":"R05","if_all":["battery_voltage_low","battery_temperature_high"],"then":"battery_fault","message":"low voltage with high battery temperature suggests a battery fault"},
+{"id":"R06","if_all":["battery_voltage_low","charge_cycle_failed"],"then":"battery_fault","message":"low voltage and failed charging suggest a battery fault"},
+{"id":"R07","if_all":["wheel_slip","encoder_mismatch","motor_current_high"],"then":"wheel_slipping","message":"three wheel-related symptoms reinforce the wheel diagnosis"},
+{"id":"R08","if_all":["vision_inconsistent","tilt_triggered","weight_stable"],"then":"sensor_drift","message":"two sensor conflicts with stable weight suggest sensor drift"},
+{"id":"R09","if_all":["battery_voltage_low","charge_cycle_failed","battery_temperature_high"],"then":"battery_fault","message":"multiple battery symptoms indicate a battery fault"},
+{"id":"R10","if_all":["motor_current_high","motor_temperature_high"],"then":"motor_overload","message":"high current and temperature suggest motor overload"},
+{"id":"R11","if_all":["motor_overload","wheel_slip"],"then":"drive_system_fault","message":"motor overload combined with wheel slip points to a drive system fault"},
+{"id":"R12","if_all":["encoder_mismatch","vision_inconsistent"],"then":"localization_fault","message":"encoder and vision disagreement can cause localization errors"},
+{"id":"R13","if_all":["battery_voltage_low","motor_temperature_high"],"then":"power_system_fault","message":"low voltage under thermal load suggests a power system issue"},
+{"id":"R14","if_all":["tilt_triggered","wheel_slip"],"then":"stability_fault","message":"tilt and wheel slip together indicate reduced stability"},
+{"id":"R15","if_all":["weight_unstable","vision_inconsistent"],"then":"load_sensor_fault","message":"unstable weight and inconsistent vision can indicate load sensing trouble"},
+{"id":"R16","if_all":["charge_cycle_failed"],"then":"charging_fault","message":"a failed charge cycle requires a charging system check"},
+{"id":"R17","if_all":["encoder_mismatch"],"then":"encoder_fault","message":"encoder mismatch requires an encoder inspection"},
+{"id":"R18","if_all":["vision_inconsistent"],"then":"camera_fault","message":"inconsistent visual readings require a camera check"}
+]
